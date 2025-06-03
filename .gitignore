@@ -72,6 +72,10 @@ data/*.xlsx
 !data/sample_data.csv
 !data/.gitkeep
 
+# Except specific files to keep
+!models/latest_model.pkl
+!models/latest_vectorizer.pkl
+
 # Logs
 *.log
 logs/
