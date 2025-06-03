@@ -1,11 +1,16 @@
-1. **Install Python dependencies:**
+# Toxic comments classifier
+
+Install dependencies
+
 ```bash
 cd backend
 pip install -r requirements.txt
 ```
 
-2. **Run the application:**
+Run app locally
+
 ```bash
 # From the backend directory
-python main.py
+uvicorn main:app --reload
 ```
+
