@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Toxic Comment Classifier</title>
+    <link rel="stylesheet" href="/static/main.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>🛡️ Toxic Comment Classifier</h1>
+        <p>Enter a comment below to check if it's toxic or not</p>
+      </header>
+
+      <main>
+        <div class="input-section">
+          <form id="classifyForm">
+            <div class="form-group">
+              <label for="commentText">Comment to analyze:</label>
+              <textarea
+                id="commentText"
+                name="text"
+                placeholder="Enter your comment here..."
+                rows="4"
+                required
+              ></textarea>
+            </div>
+            <button type="submit" id="classifyBtn">
+              <span id="btnText">🔍 Classify Comment</span>
+              <span id="btnLoader" class="loader" style="display: none"></span>
+            </button>
+          </form>
+        </div>
+
+        <div id="results" class="results-section" style="display: none">
+          <div class="result-card">
+            <div id="resultIcon" class="result-icon"></div>
+            <div id="resultMessage" class="result-message"></div>
+            <div id="resultDetails" class="result-details"></div>
+
+           
+            </div>
+          </div>
+        </div>
+
+        <div
+          id="feedbackMessage"
+          class="feedback-message"
+          style="display: none"
+        ></div>
+      </main>
+
+      <footer>
+        <div class="info">
+          <p>
+            This is a demo toxic comment classification system built with
+            FastAPI and scikit-learn.
+          </p>
+          <p>Your feedback helps improve the model's accuracy.</p>
+        </div>
+      </footer>
+    </div>
+
+    <script src="/static/script.js"></script>
+  </body>
+</html>
