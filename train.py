@@ -1,28 +1,61 @@
-import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support
-import pickle
-import re
-from datetime import datetime
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.pipeline import Pipeline
+import pandas as pd
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+    precision_recall_curve,
+)
+import numpy as np
+import joblib
 
 
-def preprocess_text(text):
-    """Basic text preprocessing."""
-    if pd.isna(text):
-        return ""
+RANDOM_STATE = 42
 
-    # Convert to lowercase
-    text = str(text).lower()
 
-    # Remove special characters and digits
-    text = re.sub(r"[^a-zA-Z\s]", " ", text)
+def train_and_evaluate(pipeline, X_train, y_train, X_test, y_test):
+    print("Тренируем модель..")
+    pipeline.fit(X_train, y_train)
+    print("Предсказываем...")
+    y_pred = pipeline.predict(X_test)
+    y_pred_proba = pipeline.predict_proba(X_test)[:, 1]
 
-    # Remove extra whitespace
-    text = " ".join(text.split())
+    # метрики
+    acc = accuracy_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
 
-    return text
+    print("Logistic Regression:")
+    print(f"Accuracy:  {acc:.4f}")
+    print(f"F1 Score:  {f1:.4f}")
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall:    {recall:.4f}")
+
+    return y_pred_proba
+
+
+def threshold_optimizer(y_pred_proba, y_test):
+    precisions, recalls, thresholds = precision_recall_curve(y_test, y_pred_proba)
+    f1_scores = 2 * (precisions * recalls) / (precisions + recalls)
+
+    optimal_idx = np.argmax(f1_scores)
+    optimal_threshold = thresholds[optimal_idx]
+
+    print(f"Оптимальный порог: {optimal_threshold:.3f}")
+
+    y_pred_optimal = (y_pred_proba >= optimal_threshold).astype(int)
+
+    print(f"С оптимальным порогом: ({optimal_threshold:.3f}):")
+    print(f"Accuracy:  {accuracy_score(y_test, y_pred_optimal):.4f}")
+    print(f"F1 Score:  {f1_score(y_test, y_pred_optimal):.4f}")
+    print(f"Precision: {precision_score(y_test, y_pred_optimal):.4f}")
+    print(f"Recall:    {recall_score(y_test, y_pred_optimal):.4f}")
+    return optimal_threshold
 
 
 def train_model(data_path="data/toxic_comments.csv"):
@@ -36,69 +69,53 @@ def train_model(data_path="data/toxic_comments.csv"):
     except FileNotFoundError:
         print("No training data found, creating sample data...")
 
-    # Preprocess text
-    df["text_clean"] = df["text"].apply(preprocess_text)
-
-    # Remove empty texts
-    df = df[df["text_clean"].str.len() > 0]
-
-    if len(df) < 10:
-        print("Not enough data for training. Need at least 10 samples.")
-        return False
-
     # Split data
     X_train, X_test, y_train, y_test = train_test_split(
-        df["text_clean"],
+        df["text"],
         df["toxic"],
         test_size=0.2,
         random_state=42,
         stratify=df["toxic"] if df["toxic"].nunique() > 1 else None,
     )
 
-    # Vectorize text (TF-IDF)
-    vectorizer = TfidfVectorizer(
-        max_features=5000,
-        stop_words="english",
-        ngram_range=(1, 2),
-        min_df=1,
-        max_df=0.95,
+    pipeline_lg = Pipeline(
+        [
+            (
+                "tfidf",
+                TfidfVectorizer(
+                    ngram_range=(1, 2),
+                    max_features=10000,
+                    stop_words="english",
+                    min_df=2,
+                    max_df=0.95,
+                    strip_accents="ascii",
+                ),
+            ),
+            (
+                "clf",
+                LogisticRegression(
+                    random_state=RANDOM_STATE,
+                    max_iter=1000,
+                    C=1.0,
+                    class_weight="balanced",
+                    penalty="l2",
+                ),
+            ),
+        ]
     )
 
-    X_train_vec = vectorizer.fit_transform(X_train)
-    X_test_vec = vectorizer.transform(X_test)
+    # Train and evaluate model
+    print("Training Logistic Regression model...")
 
-    # Train model
-    model = LogisticRegression(random_state=42, max_iter=1000)
-    model.fit(X_train_vec, y_train)
+    y_pred_proba = train_and_evaluate(pipeline_lg, X_train, y_train, X_test, y_test)
+    # Optimize threshold
+    print("Optimizing threshold...")
+    optimal_threshold = threshold_optimizer(y_pred_proba, y_test)
 
-    # Evaluate model
-    y_pred = model.predict(X_test_vec)
-    accuracy = accuracy_score(y_test, y_pred)
-    precision, recall, f1, _ = precision_recall_fscore_support(
-        y_test, y_pred, average="binary", pos_label=1
-    )
-
-    print(f"Model Performance:")
-    print(f"Accuracy: {accuracy:.3f}")
-    print(f"Precision (Toxic): {precision:.3f}")
-    print(f"Recall (Toxic): {recall:.3f}")
-    print(f"F1-Score (Toxic): {f1:.3f}")
-
-    # Save model and vectorizer
-    model_version = f"model_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-    pickle.dump(model, open(f"models/{model_version}.pkl", "wb"))
-    pickle.dump(vectorizer, open(f"models/{model_version}_vectorizer.pkl", "wb"))
-
-    # Save latest model (for easy loading)
-    pickle.dump(model, open("models/latest_model.pkl", "wb"))
-    pickle.dump(vectorizer, open("models/latest_vectorizer.pkl", "wb"))
-
-    # Save performance metrics
-    metrics = {"accuracy": accuracy, "precision": precision, "recall": recall, "f1": f1}
-
-    print(f"Model saved as {model_version}")
-    print(f"Performance metrics: {metrics}")
+    # Save model and threshold
+    print("Saving model and threshold...")
+    model_data = {"model": pipeline_lg, "threshold": optimal_threshold}
+    joblib.dump(model_data, "models/latest_model.pkl")
     return True
 
 

@@ -3,8 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-import pickle
-from train import preprocess_text
+import joblib
 
 # Initialize FastAPI app
 app = FastAPI(title="Toxic Comment Classifier", version="1.0.0")
@@ -23,16 +22,17 @@ app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 # Load model (with lazy loading)
 model = None
-vectorizer = None
+threshold = None
 
 
 def load_model():
     """Load the latest trained model."""
-    global model, vectorizer
+    global model, threshold
 
     try:
-        model = pickle.load(open("models/latest_model.pkl", "rb"))
-        vectorizer = pickle.load(open("models/latest_vectorizer.pkl", "rb"))
+        model_data = joblib.load("models/latest_model.pkl")
+        model = model_data["model"]
+        threshold = model_data["threshold"]
         print("Model loaded successfully!")
     except FileNotFoundError:
         print("Model files not found. Please train a model first.")
@@ -46,7 +46,6 @@ class ClassifyRequest(BaseModel):
 
 class ClassifyResponse(BaseModel):
     is_toxic: bool
-    confidence: float
     message: str
 
 
@@ -67,34 +66,35 @@ async def classify_text(request: ClassifyRequest):
     """Classify a text comment as toxic or not toxic."""
 
     # Load model if not already loaded
-    if model is None or vectorizer is None:
+    if model is None or threshold is None:
         load_model()
 
     # Preprocess text
-    cleaned_text = preprocess_text(request.text)
+    text = request.text.strip()
 
-    if not cleaned_text.strip():
+    if not text:
         raise HTTPException(status_code=400, detail="Empty or invalid text")
 
-    # Vectorize and predict
-    text_vec = vectorizer.transform([cleaned_text])
-    prediction = model.predict(text_vec)[0]
-    confidence_scores = model.predict_proba(text_vec)[0]
-    confidence = float(max(confidence_scores))
+    # if not english - throw error
+    if not text.isascii():
+        raise HTTPException(
+            status_code=400, detail="Text must be in English (ASCII characters only)"
+        )
 
-    is_toxic = bool(prediction)
+    # Vectorize and predict
+    proba = model.predict_proba([text])[:, 1]
+
+    is_toxic = proba[0] > threshold
+    print(f"Predicted probability: {proba[0]:.4f}, Threshold: {threshold:.4f}")
 
     # Create response message
     if is_toxic:
-        message = f"⚠️ This comment appears to be toxic (confidence: {confidence:.1%})"
+        message = f"⚠️ This comment appears to be toxic"
     else:
-        message = (
-            f"✅ This comment appears to be non-toxic (confidence: {confidence:.1%})"
-        )
+        message = f"✅ This comment appears to be non-toxic"
 
     return ClassifyResponse(
         is_toxic=is_toxic,
-        confidence=confidence,
         message=message,
     )
 

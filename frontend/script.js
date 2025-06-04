@@ -11,7 +11,6 @@ const btnLoader = document.getElementById('btnLoader');
 const resultsSection = document.getElementById('results');
 const resultIcon = document.getElementById('resultIcon');
 const resultMessage = document.getElementById('resultMessage');
-const resultDetails = document.getElementById('resultDetails');
 const feedbackMessage = document.getElementById('feedbackMessage');
 
 // Event listeners
@@ -50,7 +49,9 @@ async function handleClassify(event) {
     displayResult(result);
   } catch (error) {
     console.error('Classification error:', error);
-    showError('Failed to classify comment. Please try again.');
+    showError(
+      'Failed to classify comment. Please try again. In Eglish, please.'
+    );
   } finally {
     setLoadingState(false);
   }
@@ -72,9 +73,6 @@ function displayResult(result) {
   }
 
   resultMessage.textContent = result.message;
-  resultDetails.textContent = `Confidence: ${(result.confidence * 100).toFixed(
-    1
-  )}%`;
 
   // Show results
   resultsSection.style.display = 'block';
